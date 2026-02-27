@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Speed Skating Race Point</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ========== LOADING OVERLAY ========== -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <p>Connessione in corso...</p>
+        </div>
+    </div>
+
+    <!-- ========== LOGIN OVERLAY ========== -->
+    <div id="loginOverlay" class="login-overlay hidden">
+        <div class="login-box">
+            <h2 class="login-title">Accesso Admin</h2>
+            <div class="login-field">
+                <label for="loginEmail">Email</label>
+                <input type="email" id="loginEmail" class="login-input" placeholder="La tua email" autocomplete="email">
+            </div>
+            <div class="login-field">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" class="login-input" placeholder="Password" autocomplete="current-password">
+            </div>
+            <div id="loginError" class="login-error hidden">Email o password non corretti.</div>
+            <div class="login-buttons">
+                <button type="button" class="login-btn-cancel" id="loginCancelBtn">Annulla</button>
+                <button type="button" class="login-btn-confirm" id="loginBtn">Accedi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== CONFIGURATION SCREEN ========== -->
+    <div id="configScreen">
+        <div class="config-card">
+            <div class="config-header">
+                <h1>Speed Skating Race Point</h1>
+                <div id="adminBadgeConfig" class="admin-badge hidden">
+                    <span>Admin</span>
+                    <button type="button" id="btnLogoutConfig" class="btn-logout">Esci</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="totalLaps">Numero totale di giri</label>
+                <input type="number" id="totalLaps" min="1" placeholder="Es: 10" value="10">
+            </div>
+
+            <div class="form-group">
+                <label>Frequenza traguardi a punti</label>
+                <div class="toggle-group">
+                    <button type="button" class="toggle-btn active" data-frequency="every_lap">
+                        Ogni giro
+                    </button>
+                    <button type="button" class="toggle-btn" data-frequency="every_2_laps">
+                        Ogni 2 giri
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="startingListUrl">Lista di partenza (opzionale)</label>
+                <div class="url-input-group">
+                    <input type="url" id="startingListUrl" placeholder="https://...">
+                    <button type="button" id="btnLoadAthletes" class="btn-load-athletes">Carica</button>
+                </div>
+                <div id="loadAthletesStatus" class="load-status hidden"></div>
+            </div>
+
+            <button type="button" class="btn-primary" id="btnStartConfig">
+                Conferma e vai alla gara
+            </button>
+        </div>
+    </div>
+
+    <!-- ========== RACE SCREEN ========== -->
+    <div id="raceScreen" class="hidden">
+        <!-- Header -->
+        <div class="race-header">
+            <div class="race-header-content">
+                <div class="race-title">Speed Skating Race Point</div>
+                <div class="race-badges">
+                    <div class="badge" id="badgeConfig">-</div>
+                    <div class="badge highlight" id="badgeLaps">Giri rimanenti: -</div>
+                </div>
+                <div class="header-admin-controls">
+                    <button type="button" id="btnAdminLogin" class="btn-admin-login hidden">Admin</button>
+                    <div id="adminBadge" class="admin-badge hidden">
+                        <span>Admin</span>
+                        <button type="button" id="btnLogout" class="btn-logout">Esci</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="race-controls">
+            <div class="race-controls-buttons">
+                <button type="button" class="btn-control btn-start" id="btnStartRace">
+                    ▶️ Start Gara
+                </button>
+                <button type="button" class="btn-control btn-end hidden" id="btnEndRace">
+                    🏁 Fine Gara
+                </button>
+                <button type="button" class="btn-control btn-keyboard hidden" id="btnOpenKeyboard">
+                    <svg width="25px" height="25px" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <line fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="12" x2="12" y1="19" y2="5"/>
+                        <line fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" x1="5" x2="19" y1="12" y2="12"/>
+                    </svg>
+                    Assegna punti
+                </button>
+                <button type="button" class="btn-control btn-undo hidden" id="btnUndo">
+                    ↩️ Annulla traguardo
+                </button>
+                <button type="button" class="btn-control btn-reset" id="btnResetRace">
+                    🔄 Riavvia Gara
+                </button>
+            </div>
+            <div id="lastCheckpointSummary" class="last-checkpoint-summary hidden"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="race-content">
+            <!-- Leaderboard -->
+            <div class="leaderboard">
+                <div class="leaderboard-header">
+                    📊 Classifica in Tempo Reale
+                </div>
+                <div id="leaderboardContent">
+                    <div class="empty-leaderboard">
+                        <div class="empty-leaderboard-icon">🏆</div>
+                        <p>Nessun atleta in classifica</p>
+                        <p style="font-size: 14px; margin-top: 8px;">In attesa dell'inizio della gara...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ATHLETE MENU (Context Menu) ========== -->
+    <div id="athleteMenu" class="athlete-menu hidden">
+        <div class="menu-header">
+            <span id="athleteMenuNumber">Atleta #0</span>
+            <button type="button" class="menu-close" id="menuCloseBtn">✕</button>
+        </div>
+
+        <!-- Modify free points -->
+        <button type="button" class="menu-item" id="menuModifyPoints" data-action="modify-points">
+            <span class="menu-item-icon">✏️</span>
+            <span>Modifica punti liberi</span>
+        </button>
+
+        <!-- Edit athlete -->
+        <button type="button" class="menu-item" id="menuEditAthlete" data-action="edit-athlete">
+            <span class="menu-item-icon">👤</span>
+            <span>Modifica atleta</span>
+        </button>
+
+        <div class="menu-divider" id="menuDivider2"></div>
+
+        <!-- Lap athlete -->
+        <button type="button" class="menu-item" id="menuLap" data-action="lap">
+            <span class="menu-item-icon">🔄</span>
+            <span>Doppia</span>
+        </button>
+
+        <!-- Unlap athlete -->
+        <button type="button" class="menu-item hidden" id="menuUnlap" data-action="unlap">
+            <span class="menu-item-icon">♻️</span>
+            <span>Sdoppia</span>
+        </button>
+
+        <!-- Disqualify athlete -->
+        <button type="button" class="menu-item" id="menuDisqualify" data-action="disqualify">
+            <span class="menu-item-icon">❌</span>
+            <span>Squalifica</span>
+        </button>
+
+        <!-- Reinstate athlete -->
+        <button type="button" class="menu-item hidden" id="menuReinstate" data-action="reinstate">
+            <span class="menu-item-icon">♻️</span>
+            <span>Riammetti</span>
+        </button>
+
+        <!-- Assign checkpoint points section (always visible at bottom) -->
+        <div class="submenu" id="menuAssignPointsSection">
+            <div class="submenu-title">Assegna Punti Traguardo</div>
+            <div class="submenu-buttons" id="menuAssignPointsButtons">
+                <button type="button" class="submenu-btn" data-points="3" disabled>+3</button>
+                <button type="button" class="submenu-btn" data-points="2" disabled>+2</button>
+                <button type="button" class="submenu-btn" data-points="1" disabled>+1</button>
+            </div>
+        </div>
+
+        <!-- Edit athlete submenu -->
+        <div class="submenu hidden" id="menuEditAthleteSubmenu">
+            <div class="submenu-title">Modifica Atleta</div>
+            <div class="submenu-inputs">
+                <input type="number" id="editAthleteNumber" class="submenu-input" placeholder="Numero *" min="1">
+                <input type="text" id="editAthleteName" class="submenu-input" placeholder="Nome">
+                <input type="text" id="editAthleteSurname" class="submenu-input" placeholder="Cognome">
+            </div>
+            <div class="submenu-buttons-edit-athlete">
+                <button type="button" class="submenu-btn submenu-btn-cancel" id="btnCancelEditAthlete">Annulla</button>
+                <button type="button" class="submenu-btn submenu-btn-confirm" id="btnConfirmEditAthlete">Conferma</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== KEYBOARD OVERLAY ========== -->
+    <div id="keyboardOverlay" class="keyboard-overlay hidden">
+        <div class="keyboard-modal">
+            <div class="keyboard-header">
+                <h3>⌨️ Assegna punti</h3>
+                <button type="button" class="btn-close-keyboard" id="btnCloseKeyboard">✕</button>
+            </div>
+            <div class="keyboard-body">
+                <!-- Input Fields -->
+                <div class="keyboard-input-fields">
+                    <div class="keyboard-input-group">
+                        <label for="inputAthleteNumber">Numero *</label>
+                        <input type="number" id="inputAthleteNumber" class="keyboard-input" placeholder="Es: 10" min="1" inputmode="none">
+                    </div>
+                    <div class="keyboard-input-group">
+                        <label for="inputAthleteName">Nome</label>
+                        <input type="text" id="inputAthleteName" class="keyboard-input" placeholder="Nome atleta">
+                    </div>
+                    <div class="keyboard-input-group">
+                        <label for="inputAthleteSurname">Cognome</label>
+                        <input type="text" id="inputAthleteSurname" class="keyboard-input" placeholder="Cognome atleta">
+                    </div>
+                </div>
+
+                <div class="keyboard-grid">
+                    <button type="button" class="keyboard-key" data-key="1">1</button>
+                    <button type="button" class="keyboard-key" data-key="2">2</button>
+                    <button type="button" class="keyboard-key" data-key="3">3</button>
+                    <button type="button" class="keyboard-key" data-key="4">4</button>
+                    <button type="button" class="keyboard-key" data-key="5">5</button>
+                    <button type="button" class="keyboard-key" data-key="6">6</button>
+                    <button type="button" class="keyboard-key" data-key="7">7</button>
+                    <button type="button" class="keyboard-key" data-key="8">8</button>
+                    <button type="button" class="keyboard-key" data-key="9">9</button>
+                    <button type="button" class="keyboard-key key-clear" data-key="C">C</button>
+                    <button type="button" class="keyboard-key" data-key="0">0</button>
+                    <button type="button" class="keyboard-key" data-key="backspace">⌫</button>
+                </div>
+
+                <div class="keyboard-points">
+                    <div class="keyboard-points-title">Assegna Punti Traguardo</div>
+                    <div class="keyboard-points-grid" id="keyboardPointsGrid">
+                        <button type="button" class="keyboard-points-btn" id="btnPoints3" data-points="3" disabled>+3</button>
+                        <button type="button" class="keyboard-points-btn" id="btnPoints2" data-points="2" disabled>+2</button>
+                        <button type="button" class="keyboard-points-btn" id="btnPoints1" data-points="1" disabled>+1</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== DIALOGS ========== -->
+    <div id="dialogOverlay" class="dialog-overlay hidden">
+        <div class="dialog-box">
+            <div class="dialog-icon" id="dialogIcon">⚠️</div>
+            <div class="dialog-title" id="dialogTitle">Conferma</div>
+            <div class="dialog-message" id="dialogMessage">Sei sicuro?</div>
+            <div class="dialog-buttons">
+                <button type="button" class="dialog-btn dialog-btn-cancel" id="dialogCancel">
+                    Annulla
+                </button>
+                <button type="button" class="dialog-btn dialog-btn-confirm" id="dialogConfirm">
+                    Conferma
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase compat SDK (non richiede ES modules) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
