@@ -231,6 +231,7 @@ document.getElementById('btnLoadAthletes').addEventListener('click', async () =>
 
 // Start configuration
 btnStartConfig.addEventListener('click', () => {
+    if (!isAdmin) return;
     const laps = parseInt(totalLapsInput.value);
     if (!laps || laps < 1) {
         alert('❌ Inserisci un numero di giri valido (minimo 1)');
@@ -333,6 +334,7 @@ function updateLastCheckpointSummary() {
 }
 
 function startRace() {
+    if (!isAdmin) return;
     state.raceStarted = true;
     btnStartRace.classList.add('hidden');
     btnOpenKeyboard.classList.remove('hidden');
@@ -345,6 +347,7 @@ function startRace() {
 }
 
 function endRace() {
+    if (!isAdmin) return;
     showDialog(
         '🏁',
         'Terminare la Gara?',
@@ -366,6 +369,7 @@ function endRace() {
 }
 
 function resetRace() {
+    if (!isAdmin) return;
     showDialog(
         '🔄',
         'Riavviare la Gara?',
@@ -455,6 +459,7 @@ function isAthleteAlreadyAssignedInCheckpoint(athleteNumber) {
 }
 
 function assignPointsToAthlete(athleteNumber, points, name = '', surname = '') {
+    if (!isAdmin) return false;
     // Validation
     if (state.raceEnded) {
         alert('❌ La gara è terminata, non puoi più modificare la classifica');
@@ -588,7 +593,7 @@ function canUndo() {
 }
 
 function undoLastCheckpoint() {
-    if (!canUndo()) return;
+    if (!isAdmin || !canUndo()) return;
     
     const lastCheckpoint = state.checkpointHistory[state.checkpointHistory.length - 1];
     
@@ -635,7 +640,7 @@ function undoLastCheckpoint() {
 }
 
 function updateUndoButton() {
-    if (canUndo()) {
+    if (canUndo() && isAdmin) {
         btnUndo.classList.remove('hidden');
     } else {
         btnUndo.classList.add('hidden');
@@ -754,7 +759,7 @@ function renderLeaderboard() {
                           athlete.status === 'disqualified' ? '❌' : '';
 
         const rowClass = state.raceEnded ? '' : '';
-        const clickable = !state.raceEnded;
+        const clickable = !state.raceEnded && isAdmin;
 
         html += `
             <tr class="${rowClass}" data-athlete="${athlete.number}" ${clickable ? 'style="cursor: pointer;"' : ''}>
@@ -787,8 +792,8 @@ function renderLeaderboard() {
     
     leaderboardContent.innerHTML = html;
     
-    // Add click handlers for athlete rows
-    if (!state.raceEnded) {
+    // Add click handlers for athlete rows (admin only)
+    if (!state.raceEnded && isAdmin) {
         document.querySelectorAll('.leaderboard-table tbody tr').forEach(row => {
             row.addEventListener('click', (e) => {
                 const athleteNumber = parseInt(row.dataset.athlete);
@@ -1257,6 +1262,7 @@ const inputAthleteName = document.getElementById('inputAthleteName');
 const inputAthleteSurname = document.getElementById('inputAthleteSurname');
 
 function openKeyboard() {
+    if (!isAdmin) return;
     keyboardOverlay.classList.remove('hidden');
     clearKeyboardInputs();
     updateKeyboardPoints();
