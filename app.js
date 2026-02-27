@@ -808,7 +808,7 @@ const athleteMenu = document.getElementById('athleteMenu');
 let currentMenuAthlete = null;
 
 function showAthleteMenu(athleteNumber, event) {
-    if (state.raceEnded) return;
+    if (!isAdmin || state.raceEnded) return;
 
     currentMenuAthlete = athleteNumber;
     const athlete = state.athletes.get(athleteNumber);
