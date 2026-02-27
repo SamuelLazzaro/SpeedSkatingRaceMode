@@ -585,6 +585,10 @@ input:focus {
     font-size: 24px;
 }
 
+.pos-icon {
+    display: none;
+}
+
 .empty-leaderboard {
     padding: 60px 20px;
     text-align: center;
@@ -1227,6 +1231,23 @@ input:focus {
     .leaderboard-table td {
         padding: 10px 6px;
         font-size: 13px;
+    }
+
+    /* Hide Stato column on mobile */
+    .leaderboard-table th:nth-child(6),
+    .leaderboard-table td:nth-child(6) {
+        display: none;
+    }
+
+    /* Replace position number with status icon for lapped/disqualified */
+    .athlete-row-lapped .pos-num,
+    .athlete-row-disqualified .pos-num {
+        display: none;
+    }
+
+    .athlete-row-lapped .pos-icon,
+    .athlete-row-disqualified .pos-icon {
+        display: inline;
     }
 
     .keyboard-overlay {

@@ -758,13 +758,15 @@ function renderLeaderboard() {
         const statusIcon = athlete.status === 'lapped' ? '🔄' :
                           athlete.status === 'disqualified' ? '❌' : '';
 
-        const rowClass = state.raceEnded ? '' : '';
+        const rowClass = `athlete-row-${athlete.status}`;
         const clickable = !state.raceEnded && isAdmin;
 
         html += `
             <tr class="${rowClass}" data-athlete="${athlete.number}" ${clickable ? 'style="cursor: pointer;"' : ''}>
                 <td>
-                    <span class="position-badge ${positionClass}">${position}</span>
+                    <span class="position-badge ${positionClass}">
+                        <span class="pos-num">${position}</span>${statusIcon ? `<span class="pos-icon">${statusIcon}</span>` : ''}
+                    </span>
                 </td>
                 <td>
                     <span class="athlete-number">#${athlete.number}</span>
