@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Speed Skating Points Race</title>
+    <title>Speed Skating Race</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -38,14 +38,76 @@
         </div>
     </div>
 
-    <!-- ========== CONFIGURATION SCREEN ========== -->
-    <div id="configScreen">
+    <!-- ========== RACE TYPE SELECTION SCREEN (admin only) ========== -->
+    <div id="raceTypeScreen" class="hidden">
+        <div class="race-type-card">
+            <div class="config-header">
+                <h1>Speed Skating Race</h1>
+                <div id="adminBadgeRaceType" class="admin-badge hidden">
+                    <span>Admin</span>
+                    <button type="button" id="btnLogoutRaceType" class="btn-logout">Esci</button>
+                </div>
+            </div>
+            <h2 class="race-type-subtitle">Seleziona la tipologia di gara</h2>
+            <div class="race-type-grid">
+                <button type="button" class="race-type-btn" data-type="100m">100m</button>
+                <button type="button" class="race-type-btn" data-type="crono">Giro cronometro</button>
+                <button type="button" class="race-type-btn" data-type="sprint_giro">Giro sprint</button>
+                <button type="button" class="race-type-btn" data-type="500m">500m sprint</button>
+                <button type="button" class="race-type-btn" data-type="1000m">1000m</button>
+                <button type="button" class="race-type-btn race-type-btn-featured" data-type="punti">Gara a punti</button>
+                <button type="button" class="race-type-btn" data-type="americana">Americana</button>
+                <button type="button" class="race-type-btn race-type-btn-disabled" disabled>
+                    Gara ad eliminazione
+                    <span class="race-type-coming-soon">Prossimamente</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== FILE UPLOAD SCREEN (gare a tempo) ========== -->
+    <div id="fileUploadScreen" class="hidden">
         <div class="config-card">
             <div class="config-header">
-                <h1>Speed Skating Points Race</h1>
-                <div id="adminBadgeConfig" class="admin-badge hidden">
+                <div>
+                    <h1>Speed Skating Race</h1>
+                    <p id="fileUploadRaceTypeLabel" class="race-subtitle-small"></p>
+                </div>
+                <div id="adminBadgeFileUpload" class="admin-badge hidden">
                     <span>Admin</span>
-                    <button type="button" id="btnLogoutConfig" class="btn-logout">Esci</button>
+                    <button type="button" id="btnLogoutFileUpload" class="btn-logout">Esci</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Lista di partenza (.htm)</label>
+                <div class="file-drop-area" id="fileDropArea">
+                    <input type="file" id="htmFileInput" accept=".htm,.html" class="file-input-hidden">
+                    <label for="htmFileInput" class="file-input-label">
+                        <span id="fileInputLabelText">Scegli file .htm...</span>
+                    </label>
+                </div>
+                <div id="fileUploadStatus" class="load-status hidden"></div>
+            </div>
+
+            <div class="file-upload-buttons">
+                <button type="button" id="btnBackFromFile" class="btn-outline">← Indietro</button>
+                <button type="button" id="btnConfirmFile" class="btn-primary" disabled>Avvia →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== CONFIGURATION SCREEN (gara a punti) ========== -->
+    <div id="configScreen" class="hidden">
+        <div class="config-card">
+            <div class="config-header">
+                <h1>Gara a Punti</h1>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <button type="button" id="btnChangeRaceConfig" class="btn-change-race hidden">Cambia gara</button>
+                    <div id="adminBadgeConfig" class="admin-badge hidden">
+                        <span>Admin</span>
+                        <button type="button" id="btnLogoutConfig" class="btn-logout">Esci</button>
+                    </div>
                 </div>
             </div>
 
@@ -67,12 +129,29 @@
             </div>
 
             <div class="form-group">
-                <label for="startingListUrl">Lista di partenza (opzionale)</label>
-                <div class="url-input-group">
-                    <input type="url" id="startingListUrl" placeholder="https://...">
-                    <button type="button" id="btnLoadAthletes" class="btn-load-athletes">Carica</button>
+                <label>Lista di partenza (opzionale)</label>
+                <div class="load-tabs">
+                    <button type="button" class="load-tab active" id="tabUrl">Da URL</button>
+                    <button type="button" class="load-tab" id="tabFile">Da file .htm</button>
                 </div>
-                <div id="loadAthletesStatus" class="load-status hidden"></div>
+                <!-- URL panel -->
+                <div id="urlPanel">
+                    <div class="url-input-group">
+                        <input type="url" id="startingListUrl" placeholder="https://...">
+                        <button type="button" id="btnLoadAthletes" class="btn-load-athletes">Carica</button>
+                    </div>
+                    <div id="loadAthletesStatus" class="load-status hidden"></div>
+                </div>
+                <!-- File panel -->
+                <div id="filePanel" class="hidden">
+                    <div class="file-drop-area" id="configFileDropArea">
+                        <input type="file" id="configFileInput" accept=".htm,.html" class="file-input-hidden">
+                        <label for="configFileInput" class="file-input-label">
+                            <span id="configFileInputLabelText">Scegli file .htm...</span>
+                        </label>
+                    </div>
+                    <div id="configFileStatus" class="load-status hidden"></div>
+                </div>
             </div>
 
             <button type="button" class="btn-primary" id="btnStartConfig">
@@ -81,12 +160,12 @@
         </div>
     </div>
 
-    <!-- ========== RACE SCREEN ========== -->
+    <!-- ========== RACE SCREEN (gara a punti) ========== -->
     <div id="raceScreen" class="hidden">
         <!-- Header -->
         <div class="race-header">
             <div class="race-header-content">
-                <div class="race-title">Speed Skating Points Race</div>
+                <div class="race-title">Gara a Punti</div>
                 <div class="race-badges">
                     <div class="badge" id="badgeConfig">-</div>
                     <div class="badge highlight" id="badgeLaps">Giri rimanenti: -</div>
@@ -120,8 +199,14 @@
                 <button type="button" class="btn-control btn-undo hidden" id="btnUndo">
                     ↩️ Annulla traguardo
                 </button>
+                <button type="button" class="btn-control btn-batteries hidden" id="btnBackToBatteries">
+                    ← Batterie
+                </button>
+                <button type="button" class="btn-control btn-change-race-ctrl hidden" id="btnChangeRaceRace">
+                    Cambia gara
+                </button>
                 <button type="button" class="btn-control btn-reset" id="btnResetRace">
-                    🔄 Riavvia Gara
+                    🔄 Riavvia
                 </button>
                 <button type="button" class="btn-control btn-export-pdf hidden" id="btnExportPDF">
                     📄 Esporta PDF
@@ -144,6 +229,75 @@
                         <p style="font-size: 14px; margin-top: 8px;">In attesa dell'inizio della gara...</p>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TIMED RACE SCREEN ========== -->
+    <div id="timedRaceScreen" class="hidden">
+        <div class="race-header">
+            <div class="race-header-content">
+                <div>
+                    <div class="race-title" id="timedRaceTitle">Gara a tempo</div>
+                    <div class="race-subtitle-header" id="timedRaceSubtitle"></div>
+                </div>
+                <div class="header-admin-controls">
+                    <button type="button" id="btnTimedAdminLogin" class="btn-admin-login hidden">Admin</button>
+                    <div id="timedAdminBadge" class="admin-badge hidden">
+                        <span>Admin</span>
+                        <button type="button" id="btnTimedLogout" class="btn-logout">Esci</button>
+                    </div>
+                    <button type="button" id="btnChangeRaceTimed" class="btn-change-race-header hidden">Cambia gara</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="race-content">
+            <!-- Leaderboard -->
+            <div class="leaderboard">
+                <div class="leaderboard-header">📊 Classifica in Tempo Reale</div>
+                <div id="timedLeaderboardContent">
+                    <div class="empty-leaderboard">
+                        <div class="empty-leaderboard-icon">🏆</div>
+                        <p>Nessun atleta in classifica</p>
+                        <p style="font-size: 14px; margin-top: 8px;">In attesa dei primi tempi...</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Remaining batteries -->
+            <div class="leaderboard" id="remainingBatteriesSection">
+                <div class="leaderboard-header">🏁 Batterie rimanenti</div>
+                <div id="remainingBatteriesContent">
+                    <div class="empty-leaderboard">
+                        <div class="empty-leaderboard-icon">✅</div>
+                        <p>Tutte le batterie sono state completate</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== GARA A PUNTI — BATTERY LIST SCREEN (admin only) ========== -->
+    <div id="garaPuntiBatteryScreen" class="hidden">
+        <div class="race-header">
+            <div class="race-header-content">
+                <div>
+                    <div class="race-title">Gara a Punti</div>
+                    <div class="race-subtitle-header" id="garaPuntiBatteryTitle"></div>
+                </div>
+                <div class="header-admin-controls">
+                    <div id="adminBadgeGaraPunti" class="admin-badge hidden">
+                        <span>Admin</span>
+                        <button type="button" id="btnLogoutGaraPunti" class="btn-logout">Esci</button>
+                    </div>
+                    <button type="button" id="btnChangeRaceGaraPunti" class="btn-change-race-header hidden">Cambia gara</button>
+                </div>
+            </div>
+        </div>
+        <div class="race-content">
+            <div class="leaderboard">
+                <div class="leaderboard-header">🏁 Seleziona batteria da gestire</div>
+                <div id="garaPuntiBatteryList" class="battery-list-content"></div>
             </div>
         </div>
     </div>
@@ -264,6 +418,24 @@
                         <button type="button" class="keyboard-points-btn" id="btnPoints2" data-points="2" disabled>+2</button>
                         <button type="button" class="keyboard-points-btn" id="btnPoints1" data-points="1" disabled>+1</button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TIME ENTRY MODAL ========== -->
+    <div id="timeEntryModal" class="time-entry-overlay hidden">
+        <div class="time-entry-modal">
+            <div class="time-entry-header">
+                <h3 id="timeEntryTitle">Batteria n.1</h3>
+                <button type="button" class="btn-close-keyboard" id="btnCloseTimeEntry">✕</button>
+            </div>
+            <div class="time-entry-body">
+                <p class="time-entry-hint">Formato: MM:SS.mmm &nbsp;(es. 00:23.456)</p>
+                <div id="timeEntryAthletes"></div>
+                <div class="time-entry-buttons">
+                    <button type="button" id="btnCancelTimeEntry" class="btn-outline">Annulla</button>
+                    <button type="button" id="btnConfirmTimeEntry" class="btn-primary">Conferma tempi</button>
                 </div>
             </div>
         </div>
