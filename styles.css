@@ -1737,6 +1737,23 @@ input:focus {
     background: rgba(0, 102, 255, 0.04);
 }
 
+.file-upload-or-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0 0;
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+}
+
+.file-upload-or-divider::before,
+.file-upload-or-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+}
+
 .file-input-hidden {
     position: absolute;
     width: 1px;

@@ -204,6 +204,8 @@ function showFileUploadScreenForType(type) {
     if (fileInput) fileInput.value = '';
     const labelText = document.getElementById('fileInputLabelText');
     if (labelText) labelText.textContent = 'Scegli file .htm...';
+    const urlInput = document.getElementById('htmFileUrl');
+    if (urlInput) urlInput.value = '';
     const statusEl = document.getElementById('fileUploadStatus');
     if (statusEl) { statusEl.className = 'load-status hidden'; statusEl.textContent = ''; }
     const confirmBtn = document.getElementById('btnConfirmFile');
@@ -220,7 +222,63 @@ document.getElementById('htmFileInput').addEventListener('change', function () {
     if (!file) return;
     const labelText = document.getElementById('fileInputLabelText');
     if (labelText) labelText.textContent = file.name;
+    // Reset URL input since file is now the source
+    document.getElementById('htmFileUrl').value = '';
     handleTimedFileLoad(file);
+});
+
+document.getElementById('btnLoadHtmUrl').addEventListener('click', async () => {
+    const url = document.getElementById('htmFileUrl').value.trim();
+    const statusEl = document.getElementById('fileUploadStatus');
+    const confirmBtn = document.getElementById('btnConfirmFile');
+    const btn = document.getElementById('btnLoadHtmUrl');
+
+    if (!url) {
+        statusEl.textContent = 'Inserisci un URL valido.';
+        statusEl.className = 'load-status load-status-warning';
+        return;
+    }
+
+    statusEl.textContent = 'Caricamento...';
+    statusEl.className = 'load-status load-status-info';
+    btn.disabled = true;
+    confirmBtn.disabled = true;
+    _parsedTimedFile = null;
+
+    let html;
+    try {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            html = await response.text();
+        } catch (_) {
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+            const proxyResponse = await fetch(proxyUrl);
+            if (!proxyResponse.ok) throw new Error(`HTTP ${proxyResponse.status}`);
+            html = await proxyResponse.text();
+        }
+
+        const result = parseHtmFile(html);
+        if (result.batteries.length === 0) {
+            statusEl.textContent = 'Nessuna batteria trovata nel file.';
+            statusEl.className = 'load-status load-status-warning';
+            return;
+        }
+        const totalAthletes = result.batteries.reduce((sum, b) => sum + b.athletes.length, 0);
+        statusEl.textContent = `✓ Caricate ${result.batteries.length} batterie con ${totalAthletes} atleti.`;
+        if (result.title) statusEl.textContent += ` "${result.title}"`;
+        statusEl.className = 'load-status load-status-success';
+        _parsedTimedFile = result;
+        // Reset file input since URL is now the source
+        document.getElementById('htmFileInput').value = '';
+        document.getElementById('fileInputLabelText').textContent = 'Scegli file .htm...';
+        confirmBtn.disabled = false;
+    } catch (err) {
+        statusEl.textContent = 'Errore nel caricamento: ' + err.message;
+        statusEl.className = 'load-status load-status-error';
+    } finally {
+        btn.disabled = false;
+    }
 });
 
 function handleTimedFileLoad(file) {
