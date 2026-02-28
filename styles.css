@@ -124,7 +124,7 @@ input:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 20px 20px 56px;
 }
 
 .config-card {
@@ -309,6 +309,7 @@ input:focus {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    padding-bottom: 36px;
 }
 
 .race-header {
@@ -1566,4 +1567,28 @@ input:focus {
 
 .config-header .btn-logout:hover {
     background: var(--color-bg-secondary);
+}
+
+/* ========== FOOTER ========== */
+.app-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-main);
+    border-top: 1px solid var(--color-border);
+    z-index: 10;
+}
+
+.app-footer a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    text-decoration: underline;
 }
