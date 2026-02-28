@@ -1733,7 +1733,7 @@ function exportToPDF() {
 
     // Title
     doc.setFontSize(20);
-    doc.text('Speed Skating Race Point', 105, 20, { align: 'center' });
+    doc.text('Speed Skating Points Race', 105, 20, { align: 'center' });
 
     // Configuration info
     doc.setFontSize(12);
@@ -1897,7 +1897,7 @@ function exportToPDF() {
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.text(`Pagina ${i} di ${pageCount}`, 105, 287, { align: 'center' });
-        doc.text('Generato da Speed Skating Race Point', 105, 292, { align: 'center' });
+        doc.text('Generato da Speed Skating Points Race', 105, 292, { align: 'center' });
     }
 
     // Save PDF
