@@ -272,6 +272,7 @@ const btnEndRace = document.getElementById('btnEndRace');
 const btnOpenKeyboard = document.getElementById('btnOpenKeyboard');
 const btnUndo = document.getElementById('btnUndo');
 const btnResetRace = document.getElementById('btnResetRace');
+const btnExportPDF = document.getElementById('btnExportPDF');
 const badgeConfig = document.getElementById('badgeConfig');
 const badgeLaps = document.getElementById('badgeLaps');
 const leaderboardContent = document.getElementById('leaderboardContent');
@@ -364,9 +365,7 @@ function endRace() {
             logAction('Gara terminata - Classifica congelata');
             saveToLocalStorage();
             renderLeaderboard();
-
-            // Export PDF
-            exportToPDF();
+            btnExportPDF.classList.remove('hidden');
         }
     );
 }
@@ -419,6 +418,7 @@ function resetRace() {
             btnEndRace.classList.add('hidden');
             btnOpenKeyboard.classList.add('hidden');
             btnUndo.classList.add('hidden');
+            btnExportPDF.classList.add('hidden');
 
             // Hide last checkpoint summary
             lastCheckpointSummary.classList.add('hidden');
@@ -432,6 +432,7 @@ function resetRace() {
 btnStartRace.addEventListener('click', startRace);
 btnEndRace.addEventListener('click', endRace);
 btnResetRace.addEventListener('click', resetRace);
+btnExportPDF.addEventListener('click', exportToPDF);
 
 // ========== CHECKPOINT MANAGEMENT ==========
 function initializeCheckpoint() {
@@ -1566,6 +1567,9 @@ function applyFirebaseState(data) {
     renderLeaderboard();
     updateLastCheckpointSummary();
     updateUndoButton();
+    if (!isAdmin) {
+        btnExportPDF.classList.toggle('hidden', !state.raceEnded);
+    }
 }
 
 // Activates viewer mode: read-only, subscribes to Firebase

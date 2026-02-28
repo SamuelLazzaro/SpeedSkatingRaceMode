@@ -458,6 +458,21 @@ input:focus {
     box-shadow: var(--shadow-danger-active);
 }
 
+.btn-export-pdf {
+    background: var(--color-primary);
+    color: var(--color-text-inverse);
+}
+
+.btn-export-pdf:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    box-shadow: var(--shadow-primary);
+}
+
+.btn-export-pdf:active:not(:disabled) {
+    background: var(--color-primary-active);
+    box-shadow: var(--shadow-primary-active);
+}
+
 /* ========== LAST CHECKPOINT SUMMARY ========== */
 .last-checkpoint-summary {
     background: var(--color-bg-secondary);
