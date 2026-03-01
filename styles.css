@@ -1225,6 +1225,55 @@ input:focus {
     .submenu-inputs {
         flex-direction: column;
     }
+
+    /* Fluid leaderboard font scaling: 640px (100%) → 320px (~71%) */
+    .leaderboard-header {
+        font-size: clamp(14px, calc(10px + 1.25vw), 18px);
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td {
+        font-size: clamp(8px, calc(4px + 1.25vw), 14px);
+        padding: clamp(8px, calc(4px + 1.25vw), 12px) clamp(4px, 1.25vw, 8px);
+    }
+
+    .position-badge {
+        width: clamp(24px, calc(16px + 2.5vw), 32px);
+        height: clamp(24px, calc(16px + 2.5vw), 32px);
+        font-size: clamp(8px, calc(4px + 1.25vw), 16px);
+    }
+
+    .athlete-number {
+        font-size: clamp(8px, calc(4px + 1.5625vw), 18px);
+    }
+
+    .athlete-points {
+        font-size: clamp(8px, calc(4px + 1.5625vw), 18px);
+    }
+
+    .timed-time-cell {
+        font-size: clamp(11px, calc(7px + 1.25vw), 15px);
+    }
+
+    /* Horizontal scroll for leaderboard tables */
+    #leaderboardContent,
+    #timedLeaderboardContent {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .leaderboard-table {
+        min-width: max-content;
+    }
+
+    /* Override fixed inline widths on POS and N columns */
+    .leaderboard-table th:nth-child(1),
+    .leaderboard-table td:nth-child(1),
+    .leaderboard-table th:nth-child(2),
+    .leaderboard-table td:nth-child(2) {
+        width: auto !important;
+        white-space: nowrap;
+    }
 }
 
 @media (max-width: 560px) {
@@ -1240,33 +1289,6 @@ input:focus {
 
     .race-controls {
         padding: 12px;
-    }
-
-    .leaderboard-table th {
-        font-size: 11px;
-        padding: 10px 6px;
-    }
-
-    .leaderboard-table td {
-        padding: 10px 6px;
-        font-size: 13px;
-    }
-
-    /* Hide Stato column on mobile */
-    .leaderboard-table th:nth-child(6),
-    .leaderboard-table td:nth-child(6) {
-        display: none;
-    }
-
-    /* Replace position number with status icon for lapped/disqualified */
-    .athlete-row-lapped .pos-num,
-    .athlete-row-disqualified .pos-num {
-        display: none;
-    }
-
-    .athlete-row-lapped .pos-icon,
-    .athlete-row-disqualified .pos-icon {
-        display: inline;
     }
 
     .keyboard-overlay {
@@ -2202,5 +2224,9 @@ input:focus {
     font-weight: 700;
     font-size: 15px;
     color: var(--color-text-primary);
+}
+
+.timed-team-cell {
+    color: var(--color-text-secondary);
 }
 

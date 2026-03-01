@@ -442,7 +442,7 @@ function renderTimedLeaderboard() {
             <td><span class="athlete-number">#${entry.bib}</span></td>
             <td>${entry.surname || ''}</td>
             <td>${entry.name || ''}</td>
-            <td style="font-size:13px;color:var(--color-text-secondary);">${entry.team || ''}</td>
+            <td class="timed-team-cell">${entry.team || ''}</td>
             <td><span class="timed-time-cell">${entry.time || ''}</span></td>
         </tr>`;
     });
