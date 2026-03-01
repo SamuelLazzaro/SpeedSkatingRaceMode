@@ -390,6 +390,46 @@ function msToTime(ms) {
     return `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${String(milli).padStart(3, '0')}`;
 }
 
+// ========== TIME AUTO-FORMAT ==========
+// Digits fill from right: ms first, then seconds, then minutes.
+// e.g. typing 5→0.005, 52→0.052, 5231→5.231, 235123→2:35.123
+function formatDigitsToTime(digits) {
+    if (!digits) return '';
+    const padded = digits.padStart(7, '0');
+    const mm = parseInt(padded.slice(0, 2));
+    const ss = parseInt(padded.slice(2, 4));
+    const mmm = padded.slice(4, 7);
+    if (mm > 0) return `${mm}:${String(ss).padStart(2, '0')}.${mmm}`;
+    if (ss > 0) return `${ss}.${mmm}`;
+    return `0.${mmm}`;
+}
+
+function setupTimeAutoFormat(input) {
+    input.dataset.digits = '';
+    input.addEventListener('keydown', (e) => {
+        const passthrough = ['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+        if (passthrough.includes(e.key)) return;
+
+        e.preventDefault();
+
+        if (e.key >= '0' && e.key <= '9') {
+            const digits = input.dataset.digits || '';
+            if (digits.length >= 7) return;
+            const newDigits = digits + e.key;
+            input.dataset.digits = newDigits;
+            input.value = formatDigitsToTime(newDigits);
+        } else if (e.key === 'Backspace') {
+            const digits = input.dataset.digits || '';
+            const newDigits = digits.slice(0, -1);
+            input.dataset.digits = newDigits;
+            input.value = newDigits ? formatDigitsToTime(newDigits) : '';
+        } else if (e.key === 'Delete') {
+            input.dataset.digits = '';
+            input.value = '';
+        }
+    });
+}
+
 // ========== TIMED RACE SCREEN ==========
 function showTimedRaceScreen() {
     showOnlyScreen('timedRaceScreen');
@@ -515,6 +555,7 @@ function openBatteryTimeModal(batteryIdx) {
         </div>`;
     });
     athletesContainer.innerHTML = html;
+    athletesContainer.querySelectorAll('.time-input').forEach(setupTimeAutoFormat);
 
     document.getElementById('timeEntryModal').classList.remove('hidden');
     const firstInput = athletesContainer.querySelector('.time-input');
