@@ -50,13 +50,17 @@ const state = {
     garaPuntiBatteries: [],  // [{number, athletes:[{bib,name,surname,team}], raceState:null}]
     activeBatteryIndex: null, // null = manual / URL mode
 
+    // Shared by every race type: true once the admin closes the race ("Fine Gara").
+    // The leaderboard is then frozen and the PDF export becomes available.
+    // Timed races can be reopened; the points race cannot.
+    raceEnded: false,
+
     // ---- Gara a punti state ----
     config: {
         totalLaps: 0,
         pointsFrequency: 'every_lap'
     },
     raceStarted: false,
-    raceEnded: false,
     lapsRemaining: 0,
     athletes: new Map(),
     currentCheckpoint: {
@@ -342,6 +346,7 @@ document.getElementById('btnConfirmFile').addEventListener('click', () => {
         completed: false
     }));
     state.timedLeaderboard = [];
+    state.raceEnded = false;
     saveToLocalStorage();
     showTimedRaceScreen();
 });
@@ -456,6 +461,11 @@ function setupTimeAutoFormat(input) {
 }
 
 // ========== TIMED RACE SCREEN ==========
+const timedRaceControls = document.getElementById('timedRaceControls');
+const btnTimedEndRace = document.getElementById('btnTimedEndRace');
+const btnTimedReopenRace = document.getElementById('btnTimedReopenRace');
+const btnTimedExportPDF = document.getElementById('btnTimedExportPDF');
+
 function showTimedRaceScreen() {
     showOnlyScreen('timedRaceScreen');
 
@@ -470,9 +480,49 @@ function showTimedRaceScreen() {
     document.getElementById('btnTimedAdminLogin').classList.toggle('hidden', isAdmin);
     document.getElementById('btnChangeRaceTimed').classList.toggle('hidden', !isAdmin);
 
+    updateTimedRaceControls();
     renderTimedLeaderboard();
     renderRemainingBatteries();
     renderCompletedBatteries();
+}
+
+/**
+ * Tells whether timed-race results can currently be edited: only by the admin, and
+ * only while the race is open. After "Fine Gara" the leaderboard is frozen until the
+ * admin reopens the race.
+ * @returns {boolean}
+ */
+function canEditTimedResults() {
+    return isAdmin && !state.raceEnded;
+}
+
+/**
+ * Tells whether every battery of the timed race is completed (each athlete has a time
+ * or a special status). "Fine Gara" is offered only in this case, mirroring the points
+ * race where it appears once no laps remain.
+ * @returns {boolean}
+ */
+function allTimedBatteriesCompleted() {
+    return state.timedBatteries.length > 0 && state.timedBatteries.every(b => b.completed);
+}
+
+/**
+ * Shows/hides the buttons of the timed race controls bar according to role and race state:
+ *  - "Fine Gara"    admin, race open, every battery completed
+ *  - "Riapri Gara"  admin, race closed
+ *  - "Esporta PDF"  everyone, race closed
+ * The whole bar is hidden when none of its buttons is visible, so viewers of an
+ * ongoing race do not see an empty strip.
+ */
+function updateTimedRaceControls() {
+    const showEnd = isAdmin && !state.raceEnded && allTimedBatteriesCompleted();
+    const showReopen = isAdmin && state.raceEnded;
+    const showExport = state.raceEnded;
+
+    btnTimedEndRace.classList.toggle('hidden', !showEnd);
+    btnTimedReopenRace.classList.toggle('hidden', !showReopen);
+    btnTimedExportPDF.classList.toggle('hidden', !showExport);
+    timedRaceControls.classList.toggle('hidden', !(showEnd || showReopen || showExport));
 }
 
 /**
@@ -559,8 +609,9 @@ function renderTimedLeaderboard() {
             <th style="width:120px;">Tempo</th>
         </tr></thead><tbody>`;
 
-    // Admin only: a pencil hints that the row can be clicked to edit the result
-    const editHint = isAdmin
+    // Admin only, while the race is open: a pencil hints that the row can be clicked to edit the result
+    const canEdit = canEditTimedResults();
+    const editHint = canEdit
         ? '<span class="timed-edit-hint" title="Clicca per modificare il risultato">✏️</span>'
         : '';
 
@@ -600,8 +651,8 @@ function renderTimedLeaderboard() {
     html += '</tbody></table>';
     container.innerHTML = html;
 
-    // Admin only: clicking an athlete opens the time modal for that athlete alone
-    if (isAdmin) {
+    // Admin only, while the race is open: clicking an athlete opens the time modal for that athlete alone
+    if (canEdit) {
         container.querySelectorAll('tbody tr').forEach(row => {
             row.addEventListener('click', () => {
                 const bib = parseInt(row.dataset.bib);
@@ -628,9 +679,9 @@ function renderRemainingBatteries() {
         return;
     }
 
+    const clickable = canEditTimedResults();
     let html = '';
     remaining.forEach(battery => {
-        const clickable = isAdmin;
         const athleteNames = battery.athletes.map(a => `#${a.bib} ${a.surname} ${a.name}`.trim()).join(', ');
         html += `<div class="remaining-battery-item ${clickable ? 'clickable' : ''}" data-battery="${battery.number}">
             <div class="remaining-battery-header">
@@ -643,7 +694,7 @@ function renderRemainingBatteries() {
 
     container.innerHTML = html;
 
-    if (isAdmin) {
+    if (clickable) {
         container.querySelectorAll('.remaining-battery-item.clickable').forEach(item => {
             item.addEventListener('click', () => {
                 const batteryNumber = parseInt(item.dataset.battery);
@@ -658,7 +709,8 @@ function renderRemainingBatteries() {
  * Renders the "completed batteries" section (admin only).
  * Once every athlete of a battery has a time, the battery leaves the "remaining" list;
  * this section keeps it reachable so the admin can reopen it and correct the times.
- * Viewers already see the times in the leaderboard, so the section is hidden for them.
+ * Viewers already see the times in the leaderboard, so the section is hidden for them;
+ * it is hidden for the admin too once the race is closed, since nothing can be edited.
  */
 function renderCompletedBatteries() {
     const section = document.getElementById('completedBatteriesSection');
@@ -666,7 +718,7 @@ function renderCompletedBatteries() {
     if (!section || !container) return;
 
     const completed = state.timedBatteries.filter(b => b.completed);
-    const visible = isAdmin && completed.length > 0;
+    const visible = canEditTimedResults() && completed.length > 0;
     section.classList.toggle('hidden', !visible);
     if (!visible) {
         container.innerHTML = '';
@@ -726,6 +778,7 @@ function openSingleTimeEditModal(batteryIdx, bib) {
  * @param {number|null} onlyBib - when set, only this athlete is shown
  */
 function openTimeEntryModal(batteryIdx, onlyBib) {
+    if (!canEditTimedResults()) return;
     const battery = state.timedBatteries[batteryIdx];
     if (!battery) return;
 
@@ -990,10 +1043,51 @@ function applyTimeEntries(battery, entries) {
     calculateTimedLeaderboard();
     saveToLocalStorage();
     closeBatteryTimeModal();
+    updateTimedRaceControls(); // "Fine Gara" depends on every battery being completed
     renderTimedLeaderboard();
     renderRemainingBatteries();
     renderCompletedBatteries();
 }
+
+// ========== TIMED RACE — END / REOPEN ==========
+/**
+ * "Fine Gara" for timed races: freezes the leaderboard and enables the PDF export.
+ * Unlike the points race the closing is reversible (see reopenTimedRace), so a wrong
+ * time discovered afterwards can still be corrected.
+ */
+function endTimedRace() {
+    if (!isAdmin || !allTimedBatteriesCompleted()) return;
+    showDialog(
+        '🏁',
+        'Terminare la Gara?',
+        'La classifica verrà congelata e i tempi non saranno più modificabili. Potrai comunque riaprire la gara in seguito. Vuoi continuare?',
+        () => {
+            state.raceEnded = true;
+            logAction('Gara terminata - Classifica congelata');
+            saveToLocalStorage();
+            showTimedRaceScreen();
+        }
+    );
+}
+
+function reopenTimedRace() {
+    if (!isAdmin) return;
+    showDialog(
+        '🔓',
+        'Riaprire la Gara?',
+        'Potrai modificare di nuovo i tempi. La classifica non sarà più considerata definitiva finché non terminerai nuovamente la gara.',
+        () => {
+            state.raceEnded = false;
+            logAction('Gara riaperta - Classifica modificabile');
+            saveToLocalStorage();
+            showTimedRaceScreen();
+        }
+    );
+}
+
+btnTimedEndRace.addEventListener('click', endTimedRace);
+btnTimedReopenRace.addEventListener('click', reopenTimedRace);
+btnTimedExportPDF.addEventListener('click', exportToPDF);
 
 /**
  * Builds state.timedLeaderboard from the batteries.
@@ -2672,9 +2766,62 @@ document.getElementById('btnTimedAdminLogin').addEventListener('click', () => {
 });
 
 // ========== PDF EXPORT ==========
+/**
+ * Date and time of the export, formatted for the PDF header and for the file name.
+ * @returns {{dateStr: string, timeStr: string, fileSuffix: string}}
+ */
+function getExportTimestamp() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const fileSuffix = `${dateStr.replace(/\//g, '-')}_${timeStr.replace(/:/g, '-')}`;
+    return { dateStr, timeStr, fileSuffix };
+}
+
+/**
+ * Writes "Pagina X di Y" and the app credit at the bottom of every page.
+ * @param {Object} doc - jsPDF document
+ */
+function addPdfFooter(doc) {
+    doc.setFontSize(8);
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text(`Pagina ${i} di ${pageCount}`, 105, 287, { align: 'center' });
+        doc.text('Generato da Speed Skating Race', 105, 292, { align: 'center' });
+    }
+}
+
+/**
+ * Shortens a string with "..." so that it fits in maxWidth (mm) with the current font,
+ * keeping table columns from overlapping on long names.
+ * @param {Object} doc - jsPDF document
+ * @param {string} text
+ * @param {number} maxWidth
+ * @returns {string}
+ */
+function truncateToWidth(doc, text, maxWidth) {
+    if (doc.getTextWidth(text) <= maxWidth) return text;
+    let shortened = text;
+    while (shortened.length > 0 && doc.getTextWidth(shortened + '...') > maxWidth) {
+        shortened = shortened.slice(0, -1);
+    }
+    return shortened + '...';
+}
+
+/** Entry point of the "Esporta PDF" buttons: picks the layout of the active race type. */
 function exportToPDF() {
+    if (isTimedRace(state.raceType)) {
+        exportTimedRaceToPDF();
+    } else {
+        exportPointsRaceToPDF();
+    }
+}
+
+function exportPointsRaceToPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    const { dateStr, timeStr, fileSuffix } = getExportTimestamp();
 
     doc.setFontSize(20);
     doc.text('Speed Skating Points Race', 105, 20, { align: 'center' });
@@ -2683,9 +2830,6 @@ function exportToPDF() {
     const checkpointText = state.config.pointsFrequency === 'every_lap' ? 'Ogni giro' : 'Ogni 2 giri';
     doc.text('Configurazione: ' + state.config.totalLaps + ' giri totali, Traguardi: ' + checkpointText, 105, 30, { align: 'center' });
 
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timeStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     doc.setFontSize(10);
     doc.text(`Esportato il ${dateStr} alle ${timeStr}`, 105, 37, { align: 'center' });
 
@@ -2765,13 +2909,157 @@ function exportToPDF() {
         doc.text('Nessun traguardo completato', 20, yPos);
     }
 
-    doc.setFontSize(8);
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.text(`Pagina ${i} di ${pageCount}`, 105, 287, { align: 'center' });
-        doc.text('Generato da Speed Skating Race', 105, 292, { align: 'center' });
-    }
+    addPdfFooter(doc);
+    doc.save(`gara_punti_${fileSuffix}.pdf`);
+}
 
-    doc.save(`gara_punti_${dateStr.replace(/\//g, '-')}_${timeStr.replace(/:/g, '-')}.pdf`);
+// Column x positions (mm) of the timed-race PDF tables: A4 is 210mm wide, margins 20mm.
+// Text columns are truncated to the given widths so they never run into the next one.
+const TIMED_PDF_COL = { pos: 20, bib: 32, surname: 47, name: 87, team: 125, time: 168 };
+const TIMED_PDF_COL_WIDTH = { surname: 38, name: 36, team: 41 };
+
+/**
+ * Writes the header row of a timed-race PDF table and the line under it.
+ * @param {Object} doc - jsPDF document
+ * @param {number} yPos
+ */
+function writeTimedPdfTableHeader(doc, yPos) {
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text('Pos', TIMED_PDF_COL.pos, yPos);
+    doc.text('Num', TIMED_PDF_COL.bib, yPos);
+    doc.text('Cognome', TIMED_PDF_COL.surname, yPos);
+    doc.text('Nome', TIMED_PDF_COL.name, yPos);
+    doc.text('Squadra', TIMED_PDF_COL.team, yPos);
+    doc.text('Tempo', TIMED_PDF_COL.time, yPos);
+    doc.line(20, yPos + 2, 190, yPos + 2);
+    doc.setFont(undefined, 'normal');
+}
+
+/**
+ * Writes one athlete row of a timed-race PDF table.
+ * @param {Object} doc - jsPDF document
+ * @param {number} yPos
+ * @param {{position: string, bib: number, surname: string, name: string, team: string, result: string}} row
+ */
+function writeTimedPdfRow(doc, yPos, row) {
+    doc.text(row.position, TIMED_PDF_COL.pos, yPos);
+    doc.text(`#${row.bib}`, TIMED_PDF_COL.bib, yPos);
+    doc.text(truncateToWidth(doc, row.surname || '', TIMED_PDF_COL_WIDTH.surname), TIMED_PDF_COL.surname, yPos);
+    doc.text(truncateToWidth(doc, row.name || '', TIMED_PDF_COL_WIDTH.name), TIMED_PDF_COL.name, yPos);
+    doc.text(truncateToWidth(doc, row.team || '', TIMED_PDF_COL_WIDTH.team), TIMED_PDF_COL.team, yPos);
+    doc.text(row.result, TIMED_PDF_COL.time, yPos);
+}
+
+/**
+ * Position and result texts of a leaderboard entry, as shown on screen: athletes with
+ * a special status (DSQ/DNS/DNF) have no position, so the status code replaces both.
+ * @param {Object|undefined} entry - state.timedLeaderboard entry; undefined = no result yet
+ * @returns {{position: string, result: string}}
+ */
+function timedPdfResultTexts(entry) {
+    if (!entry) return { position: '-', result: '-' };
+    const status = getTimedStatus(entry);
+    if (status) {
+        return { position: TIMED_STATUS[status].label, result: TIMED_STATUS[status].description };
+    }
+    return { position: String(entry.position), result: entry.time || '' };
+}
+
+/**
+ * Overall leaderboard entry of a battery athlete, or undefined when the athlete has
+ * no result. Entries saved before the batteryNumber field existed match by bib only.
+ * @param {number} bib
+ * @param {number} batteryNumber
+ * @returns {Object|undefined}
+ */
+function findTimedLeaderboardEntry(bib, batteryNumber) {
+    return state.timedLeaderboard.find(e =>
+        e.bib === bib && (e.batteryNumber === undefined || e.batteryNumber === batteryNumber));
+}
+
+/**
+ * PDF of a timed race: header (race type, title read from the start list, export date),
+ * the final leaderboard, then the results battery by battery.
+ *
+ * The per-battery section lists the athletes of each battery in leaderboard order,
+ * with their overall position, so the two sections are always consistent.
+ */
+function exportTimedRaceToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const { dateStr, timeStr, fileSuffix } = getExportTimestamp();
+
+    // ---- Header ----
+    doc.setFontSize(20);
+    doc.text(RACE_TYPE_LABELS[state.raceType] || 'Gara a tempo', 105, 20, { align: 'center' });
+
+    let yPos = 30;
+    if (state.raceTitle) {
+        doc.setFontSize(12);
+        doc.text(state.raceTitle, 105, yPos, { align: 'center' });
+        yPos += 7;
+    }
+    doc.setFontSize(10);
+    doc.text(`Esportato il ${dateStr} alle ${timeStr}`, 105, yPos, { align: 'center' });
+    yPos += 13;
+
+    // ---- Final leaderboard ----
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('Classifica Finale', 20, yPos);
+    yPos += 10;
+    writeTimedPdfTableHeader(doc, yPos);
+    yPos += 10;
+
+    if (state.timedLeaderboard.length === 0) {
+        doc.text('Nessun risultato registrato', 20, yPos);
+        yPos += 7;
+    }
+    state.timedLeaderboard.forEach(entry => {
+        if (yPos > 270) { doc.addPage(); yPos = 20; }
+        const { position, result } = timedPdfResultTexts(entry);
+        writeTimedPdfRow(doc, yPos, { position, result, bib: entry.bib, surname: entry.surname, name: entry.name, team: entry.team });
+        yPos += 7;
+    });
+
+    // ---- Results battery by battery ----
+    yPos += 10;
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('Risultati per batteria', 20, yPos);
+    yPos += 10;
+
+    state.timedBatteries.forEach(battery => {
+        // Pair each athlete with their leaderboard entry, then follow the leaderboard order
+        // (athletes without a result, if any, go last)
+        const rows = battery.athletes.map(athlete => ({
+            athlete,
+            entry: findTimedLeaderboardEntry(athlete.bib, battery.number)
+        }));
+        const leaderboardIndex = row => row.entry ? state.timedLeaderboard.indexOf(row.entry) : Number.MAX_SAFE_INTEGER;
+        rows.sort((a, b) => leaderboardIndex(a) - leaderboardIndex(b));
+
+        // Keep the battery title together with its header and at least one row
+        if (yPos > 255) { doc.addPage(); yPos = 20; }
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Batteria n.${battery.number}`, 20, yPos);
+        yPos += 7;
+        writeTimedPdfTableHeader(doc, yPos);
+        yPos += 8;
+
+        rows.forEach(row => {
+            if (yPos > 270) { doc.addPage(); yPos = 20; }
+            const { position, result } = timedPdfResultTexts(row.entry);
+            const a = row.athlete;
+            writeTimedPdfRow(doc, yPos, { position, result, bib: a.bib, surname: a.surname, name: a.name, team: a.team });
+            yPos += 7;
+        });
+        yPos += 6;
+    });
+
+    addPdfFooter(doc);
+    doc.save(`${state.raceType}_${fileSuffix}.pdf`);
 }
