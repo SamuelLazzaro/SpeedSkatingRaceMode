@@ -14,6 +14,27 @@ const RACE_TYPE_LABELS = {
 const TIMED_RACE_TYPES = ['100m', 'crono', 'sprint_giro', '500m', '1000m', 'americana'];
 function isTimedRace(type) { return TIMED_RACE_TYPES.includes(type); }
 
+/**
+ * Special results an athlete of a timed race can get instead of (or on top of) a time.
+ * The code is stored in athlete.status; a missing status means "ranked by time".
+ * A stored time is kept when a status is assigned, so removing the status brings it back.
+ *
+ * Object order = order of the buttons in the time entry modal.
+ * `rankOrder` = order at the bottom of the leaderboard, after every valid time.
+ *
+ * @typedef {Object} TimedStatus
+ * @property {string} code        - stored value
+ * @property {string} label       - short label shown in badges and buttons
+ * @property {string} description - long label shown in place of the time
+ * @property {number} rankOrder
+ */
+/** @type {Object<string, TimedStatus>} */
+const TIMED_STATUS = {
+    DSQ: { code: 'DSQ', label: 'SQ',  description: 'Squalificato',   rankOrder: 2 },
+    DNS: { code: 'DNS', label: 'NP',  description: 'Non presentato', rankOrder: 3 },
+    DNF: { code: 'DNF', label: 'DNF', description: 'Non arrivato',   rankOrder: 1 }
+};
+
 // ========== STATE MANAGEMENT ==========
 const state = {
     // Race type (null until admin selects)
@@ -21,8 +42,9 @@ const state = {
     raceTitle: '',
 
     // For timed races
-    timedBatteries: [],   // [{number, athletes:[{bib,name,surname,team,time,timeMs}], completed}]
-    timedLeaderboard: [], // [{bib,name,surname,team,time,timeMs,position}]
+    // athlete.status: optional TIMED_STATUS code (absent = ranked by time)
+    timedBatteries: [],   // [{number, athletes:[{bib,name,surname,team,time,timeMs,status?}], completed}]
+    timedLeaderboard: [], // [{bib,name,surname,team,time,timeMs,status?,position,batteryNumber}]
 
     // For gara a punti with file (battery mode)
     garaPuntiBatteries: [],  // [{number, athletes:[{bib,name,surname,team}], raceState:null}]
@@ -465,6 +487,39 @@ function athleteHasTime(athlete) {
 }
 
 /**
+ * Returns the special status of a timed-race athlete, normalized to null when absent.
+ * Unknown codes (e.g. corrupted data) are treated as "no status".
+ * @param {{status?: string|null}} athlete
+ * @returns {string|null} a TIMED_STATUS code or null
+ */
+function getTimedStatus(athlete) {
+    const code = athlete.status;
+    return (code && TIMED_STATUS[code]) ? code : null;
+}
+
+/**
+ * Tells whether an athlete has a result of any kind: a time or a special status.
+ * Used for battery completion and for the leaderboard.
+ * @param {Object} athlete
+ * @returns {boolean}
+ */
+function athleteHasResult(athlete) {
+    return athleteHasTime(athlete) || getTimedStatus(athlete) !== null;
+}
+
+/**
+ * Human-readable result: the status label when present, otherwise the time,
+ * otherwise a dash. Used in confirmation dialogs and battery summaries.
+ * @param {string|null} status - TIMED_STATUS code or null
+ * @param {string|null|undefined} time - formatted time
+ * @returns {string}
+ */
+function formatTimedResult(status, time) {
+    if (status) return TIMED_STATUS[status].label;
+    return time || '—';
+}
+
+/**
  * Finds the index in state.timedBatteries of the battery containing an athlete.
  * The battery number is preferred (the same bib could in theory appear in several
  * batteries); leaderboards saved before that field existed fall back to a bib-only search.
@@ -504,23 +559,41 @@ function renderTimedLeaderboard() {
             <th style="width:120px;">Tempo</th>
         </tr></thead><tbody>`;
 
-    // Admin only: a pencil hints that the row can be clicked to edit the time
+    // Admin only: a pencil hints that the row can be clicked to edit the result
     const editHint = isAdmin
-        ? '<span class="timed-edit-hint" title="Clicca per modificare il tempo">✏️</span>'
+        ? '<span class="timed-edit-hint" title="Clicca per modificare il risultato">✏️</span>'
         : '';
 
     state.timedLeaderboard.forEach(entry => {
-        const posClass = entry.position === 1 ? 'position-1' :
-                         entry.position === 2 ? 'position-2' :
-                         entry.position === 3 ? 'position-3' : 'position-other';
+        const status = getTimedStatus(entry);
         const batteryAttr = (entry.batteryNumber !== undefined) ? entry.batteryNumber : '';
-        html += `<tr data-bib="${entry.bib}" data-battery="${batteryAttr}">
-            <td><span class="position-badge ${posClass}">${entry.position}</span></td>
+
+        // Athletes with a special status have no position: the badge shows the
+        // status label and the time column its description.
+        let positionCell;
+        let resultCell;
+        let rowClass = '';
+        if (status) {
+            const statusInfo = TIMED_STATUS[status];
+            const statusClass = `timed-status-${status.toLowerCase()}`;
+            positionCell = `<span class="position-badge position-status ${statusClass}" title="${statusInfo.description}">${statusInfo.label}</span>`;
+            resultCell = `<span class="timed-status-cell">${statusInfo.description}</span>`;
+            rowClass = 'timed-row-status';
+        } else {
+            const posClass = entry.position === 1 ? 'position-1' :
+                             entry.position === 2 ? 'position-2' :
+                             entry.position === 3 ? 'position-3' : 'position-other';
+            positionCell = `<span class="position-badge ${posClass}">${entry.position}</span>`;
+            resultCell = `<span class="timed-time-cell">${entry.time || ''}</span>`;
+        }
+
+        html += `<tr class="${rowClass}" data-bib="${entry.bib}" data-battery="${batteryAttr}">
+            <td>${positionCell}</td>
             <td><span class="athlete-number">#${entry.bib}</span></td>
             <td>${entry.surname || ''}</td>
             <td>${entry.name || ''}</td>
             <td class="timed-team-cell">${entry.team || ''}</td>
-            <td><span class="timed-time-cell">${entry.time || ''}</span>${editHint}</td>
+            <td>${resultCell}${editHint}</td>
         </tr>`;
     });
 
@@ -603,7 +676,7 @@ function renderCompletedBatteries() {
     let html = '';
     completed.forEach(battery => {
         const athleteSummary = battery.athletes
-            .map(a => `#${a.bib} ${a.surname} ${a.name}`.trim() + ` (${a.time})`)
+            .map(a => `#${a.bib} ${a.surname} ${a.name}`.trim() + ` (${formatTimedResult(getTimedStatus(a), a.time)})`)
             .join(', ');
         html += `<div class="remaining-battery-item clickable" data-battery="${battery.number}">
             <div class="remaining-battery-header">
@@ -671,26 +744,68 @@ function openTimeEntryModal(batteryIdx, onlyBib) {
         title = `Modifica tempi — Batteria n.${battery.number}`;
     }
     document.getElementById('timeEntryTitle').textContent = title;
-    document.getElementById('btnConfirmTimeEntry').textContent = isSingleEdit ? 'Salva tempo' : 'Conferma tempi';
+    document.getElementById('btnConfirmTimeEntry').textContent = isSingleEdit ? 'Salva risultato' : 'Conferma risultati';
+
+    // One button per special status, shown next to the time input of every athlete
+    const statusButtonsHtml = Object.values(TIMED_STATUS).map(s =>
+        `<button type="button" class="time-status-btn" data-status="${s.code}" title="${s.description}">${s.label}</button>`
+    ).join('');
 
     const athletesContainer = document.getElementById('timeEntryAthletes');
     let html = '';
     athletesToShow.forEach(a => {
         const fullName = [a.surname, a.name].filter(Boolean).join(' ');
-        html += `<div class="time-input-row">
+        const currentStatus = getTimedStatus(a);
+        html += `<div class="time-input-row" data-bib="${a.bib}" data-status="${currentStatus || ''}">
             <span class="time-input-bib">#${a.bib}</span>
             <span class="time-input-name">${fullName}</span>
             <input type="text" class="time-input" data-bib="${a.bib}"
                    placeholder="00:00.000" autocomplete="off" inputmode="decimal"
                    value="${a.time || ''}">
+            <div class="time-status-group" role="group" aria-label="Stato atleta">${statusButtonsHtml}</div>
         </div>`;
     });
     athletesContainer.innerHTML = html;
     athletesContainer.querySelectorAll('.time-input').forEach(setupTimeAutoFormat);
+    athletesContainer.querySelectorAll('.time-input-row').forEach(setupStatusToggle);
 
     document.getElementById('timeEntryModal').classList.remove('hidden');
-    const firstInput = athletesContainer.querySelector('.time-input');
+    const firstInput = athletesContainer.querySelector('.time-input:not(:disabled)');
     if (firstInput) setTimeout(() => firstInput.focus(), 100);
+}
+
+/**
+ * Wires the status buttons of one modal row.
+ *
+ * The row's current choice lives in row.dataset.status ('' = no status, i.e. a time
+ * is expected). The buttons behave like an exclusive toggle group: clicking the
+ * active one clears the status, clicking another one replaces it. While a status
+ * is active the time input is disabled: the status takes precedence over the time,
+ * but the typed/stored time is not lost, so the admin can go back to it.
+ *
+ * @param {HTMLElement} row - a .time-input-row element
+ */
+function setupStatusToggle(row) {
+    const timeInput = row.querySelector('.time-input');
+    const buttons = row.querySelectorAll('.time-status-btn');
+
+    const refreshRow = () => {
+        const activeStatus = row.dataset.status || '';
+        buttons.forEach(btn => btn.classList.toggle('active', btn.dataset.status === activeStatus));
+        timeInput.disabled = activeStatus !== '';
+        timeInput.classList.remove('error');
+    };
+
+    buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const isAlreadyActive = row.dataset.status === btn.dataset.status;
+            row.dataset.status = isAlreadyActive ? '' : btn.dataset.status;
+            refreshRow();
+            if (!timeInput.disabled) timeInput.focus();
+        });
+    });
+
+    refreshRow();
 }
 
 function closeBatteryTimeModal() {
@@ -706,42 +821,68 @@ document.getElementById('btnConfirmTimeEntry').addEventListener('click', () => {
 });
 
 /**
- * A validated time typed in the modal for one athlete.
- * @typedef {Object} TimeEntry
+ * The result chosen in the modal for one athlete: a status, or a time, or nothing.
+ * @typedef {Object} ResultEntry
  * @property {Object} athlete - the athlete object inside state.timedBatteries
- * @property {number} timeMs
- * @property {string} time - normalized "MM:SS.mmm"
+ * @property {string|null} status - TIMED_STATUS code, or null when ranked by time
+ * @property {number|null} timeMs - null when the athlete has no time
+ * @property {string|null} time - normalized "MM:SS.mmm", or null
  */
 
 /**
- * Reads and validates the inputs currently shown in the modal.
+ * Reads and validates the rows currently shown in the modal.
  *
- * Rules for each input:
- *  - empty, athlete without a time  -> skipped (time not available yet)
- *  - empty, athlete with a time     -> error: an existing time can be replaced, never deleted
- *  - unparsable                     -> error
- *  - valid                          -> returned as a TimeEntry
+ * Rules for each row:
+ *  - status button active            -> ResultEntry with that status; the time fields
+ *                                       are carried over unchanged from the athlete
+ *                                       (the input is disabled, whatever it shows is ignored)
+ *  - no status, empty input:
+ *      - athlete has a time          -> error: an existing time can be replaced, never deleted
+ *      - athlete has a status only   -> ResultEntry with no status and no time
+ *                                       (the status is being removed, e.g. wrongly marked NP)
+ *      - athlete has nothing         -> skipped (result not available yet)
+ *  - no status, unparsable input     -> error
+ *  - no status, valid time           -> ResultEntry with that time and no status
  * Invalid inputs get the "error" class so the admin sees which ones to fix.
  *
  * @param {Object} battery - the battery whose athletes are shown in the modal
- * @returns {{entries: TimeEntry[], errorMessage: string|null}}
+ * @returns {{entries: ResultEntry[], errorMessage: string|null}}
  */
 function collectTimeEntryInputs(battery) {
-    const inputs = document.querySelectorAll('#timeEntryAthletes .time-input');
+    const rows = document.querySelectorAll('#timeEntryAthletes .time-input-row');
     const entries = [];
     let hasFormatError = false;
     let hasDeletedTime = false;
 
-    inputs.forEach(input => {
-        const bib = parseInt(input.dataset.bib);
+    rows.forEach(row => {
+        const bib = parseInt(row.dataset.bib);
         const athlete = battery.athletes.find(a => a.bib === bib);
         if (!athlete) return;
+
+        const input = row.querySelector('.time-input');
+        const chosenStatus = row.dataset.status || null;
+
+        if (chosenStatus) {
+            input.classList.remove('error');
+            entries.push({
+                athlete,
+                status: chosenStatus,
+                timeMs: athleteHasTime(athlete) ? athlete.timeMs : null,
+                time: athleteHasTime(athlete) ? athlete.time : null
+            });
+            return;
+        }
 
         const typedValue = input.value.trim();
         if (!typedValue) {
             const isDeletingExistingTime = athleteHasTime(athlete);
             input.classList.toggle('error', isDeletingExistingTime);
-            if (isDeletingExistingTime) hasDeletedTime = true;
+            if (isDeletingExistingTime) {
+                hasDeletedTime = true;
+            } else if (getTimedStatus(athlete) !== null) {
+                // Status removed without a time: the athlete goes back to "no result"
+                entries.push({ athlete, status: null, timeMs: null, time: null });
+            }
             return;
         }
 
@@ -753,16 +894,30 @@ function collectTimeEntryInputs(battery) {
         }
 
         input.classList.remove('error');
-        entries.push({ athlete, timeMs: ms, time: msToTime(ms) });
+        entries.push({ athlete, status: null, timeMs: ms, time: msToTime(ms) });
     });
 
     let errorMessage = null;
     if (hasFormatError) {
         errorMessage = '❌ Uno o più tempi non sono nel formato corretto (MM:SS.mmm o SS.mmm)';
     } else if (hasDeletedTime) {
-        errorMessage = '❌ Un tempo già inserito non può essere cancellato, solo sostituito';
+        errorMessage = '❌ Un tempo già inserito non può essere cancellato, solo sostituito (oppure assegna uno stato SQ / NP / DNF)';
     }
     return { entries, errorMessage };
+}
+
+/**
+ * Tells whether a ResultEntry would change the athlete's stored result.
+ * Compares status and time separately, normalizing null/undefined.
+ * @param {ResultEntry} entry
+ * @returns {boolean}
+ */
+function resultEntryChangesAthlete(entry) {
+    const athlete = entry.athlete;
+    const statusChanged = entry.status !== getTimedStatus(athlete);
+    const storedTimeMs = athleteHasTime(athlete) ? athlete.timeMs : null;
+    const timeChanged = entry.timeMs !== storedTimeMs;
+    return statusChanged || timeChanged;
 }
 
 /**
@@ -771,8 +926,8 @@ function collectTimeEntryInputs(battery) {
  * Flow:
  *  1. validate the inputs (see collectTimeEntryInputs)
  *  2. keep only the entries that actually change something
- *  3. if at least one EXISTING time is being changed, ask for confirmation
- *     showing "old -> new" for each of them; brand-new times are saved directly
+ *  3. if at least one EXISTING result (time or status) is being changed, ask for
+ *     confirmation showing "old -> new" for each of them; brand-new results are saved directly
  *
  * @param {number} batteryIdx - index in state.timedBatteries
  */
@@ -787,13 +942,13 @@ function submitBatteryTimes(batteryIdx) {
         return;
     }
 
-    const changedEntries = entries.filter(e => e.timeMs !== e.athlete.timeMs);
+    const changedEntries = entries.filter(resultEntryChangesAthlete);
     if (changedEntries.length === 0) {
         closeBatteryTimeModal();
         return;
     }
 
-    const modifiedExisting = changedEntries.filter(e => athleteHasTime(e.athlete));
+    const modifiedExisting = changedEntries.filter(e => athleteHasResult(e.athlete));
     if (modifiedExisting.length === 0) {
         applyTimeEntries(battery, changedEntries);
         return;
@@ -801,27 +956,36 @@ function submitBatteryTimes(batteryIdx) {
 
     const changesText = modifiedExisting.map(e => {
         const fullName = [e.athlete.surname, e.athlete.name].filter(Boolean).join(' ');
-        return `#${e.athlete.bib} ${fullName}: ${e.athlete.time} → ${e.time}`;
+        const oldResult = formatTimedResult(getTimedStatus(e.athlete), e.athlete.time);
+        const newResult = formatTimedResult(e.status, e.time);
+        return `#${e.athlete.bib} ${fullName}: ${oldResult} → ${newResult}`;
     }).join('\n');
-    const dialogTitleText = modifiedExisting.length === 1 ? 'Modifica tempo' : 'Modifica tempi';
+    const dialogTitleText = modifiedExisting.length === 1 ? 'Modifica risultato' : 'Modifica risultati';
     showDialog('✏️', dialogTitleText,
-        `Confermi la modifica dei seguenti tempi?\n\n${changesText}`,
+        `Confermi la modifica dei seguenti risultati?\n\n${changesText}`,
         () => applyTimeEntries(battery, changedEntries));
 }
 
 /**
  * Writes the entries into the battery, then recomputes leaderboard, persists and re-renders.
+ * The status property is deleted (not set to null) when absent: Firebase drops nulls on
+ * write anyway, so this keeps localStorage and Firebase data identical.
  * @param {Object} battery
- * @param {TimeEntry[]} entries
+ * @param {ResultEntry[]} entries
  */
 function applyTimeEntries(battery, entries) {
     entries.forEach(e => {
         e.athlete.time = e.time;
         e.athlete.timeMs = e.timeMs;
+        if (e.status) {
+            e.athlete.status = e.status;
+        } else {
+            delete e.athlete.status;
+        }
     });
 
-    // A battery is completed when every athlete has a time
-    battery.completed = battery.athletes.every(athleteHasTime);
+    // A battery is completed when every athlete has a result (time or status)
+    battery.completed = battery.athletes.every(athleteHasResult);
 
     calculateTimedLeaderboard();
     saveToLocalStorage();
@@ -831,33 +995,55 @@ function applyTimeEntries(battery, entries) {
     renderCompletedBatteries();
 }
 
+/**
+ * Builds state.timedLeaderboard from the batteries.
+ *
+ * Athletes ranked by time come first, sorted ascending, with positions (ties share
+ * the same position). Athletes with a special status follow, grouped by
+ * TIMED_STATUS.rankOrder (DNF, then SQ, then NP), without a position; within the
+ * same status they are listed by bib. A stored time of a status athlete is ignored
+ * for ranking purposes.
+ */
 function calculateTimedLeaderboard() {
-    const entries = [];
+    const rankedEntries = [];
+    const statusEntries = [];
     state.timedBatteries.forEach(battery => {
         battery.athletes.forEach(a => {
-            if (athleteHasTime(a)) {
-                entries.push({
-                    bib: a.bib, name: a.name, surname: a.surname, team: a.team,
-                    time: a.time, timeMs: a.timeMs,
-                    batteryNumber: battery.number // lets the leaderboard locate the athlete for editing
-                });
+            if (!athleteHasResult(a)) return;
+            const status = getTimedStatus(a);
+            const entry = {
+                bib: a.bib, name: a.name, surname: a.surname, team: a.team,
+                time: a.time, timeMs: a.timeMs,
+                batteryNumber: battery.number // lets the leaderboard locate the athlete for editing
+            };
+            if (status) {
+                entry.status = status;
+                entry.position = null;
+                statusEntries.push(entry);
+            } else {
+                rankedEntries.push(entry);
             }
         });
     });
 
-    // Sort by time ascending
-    entries.sort((a, b) => a.timeMs - b.timeMs);
-
-    // Assign positions (ties share same position)
+    // Ranked athletes: sort by time ascending, assign positions (ties share same position)
+    rankedEntries.sort((a, b) => a.timeMs - b.timeMs);
     let pos = 1;
-    for (let i = 0; i < entries.length; i++) {
-        if (i > 0 && entries[i].timeMs !== entries[i - 1].timeMs) {
+    for (let i = 0; i < rankedEntries.length; i++) {
+        if (i > 0 && rankedEntries[i].timeMs !== rankedEntries[i - 1].timeMs) {
             pos = i + 1;
         }
-        entries[i].position = pos;
+        rankedEntries[i].position = pos;
     }
 
-    state.timedLeaderboard = entries;
+    // Status athletes: group by status rank, then by bib for a stable order
+    statusEntries.sort((a, b) => {
+        const rankDiff = TIMED_STATUS[a.status].rankOrder - TIMED_STATUS[b.status].rankOrder;
+        if (rankDiff !== 0) return rankDiff;
+        return a.bib - b.bib;
+    });
+
+    state.timedLeaderboard = rankedEntries.concat(statusEntries);
 }
 
 // ========== GARA A PUNTI — SETUP ==========
