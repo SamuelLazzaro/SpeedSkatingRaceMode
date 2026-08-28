@@ -26,9 +26,9 @@
     --color-neutral: #999999;      /* Grigio neutro */
 
     /* Special results in timed races (badge in leaderboard + toggle in time entry modal) */
-    --color-status-dsq: var(--color-danger);        /* SQ  - squalificato */
+    --color-status-dsq: var(--color-danger);        /* DSQ  - squalificato */
     --color-status-dsq-text: var(--color-text-inverse);
-    --color-status-dns: var(--color-neutral);       /* NP  - non presentato */
+    --color-status-dns: var(--color-neutral);       /* DNS  - non presentato */
     --color-status-dns-text: var(--color-text-inverse);
     --color-status-dnf: var(--color-warning);       /* DNF - non arrivato */
     --color-status-dnf-text: var(--color-text-primary);
@@ -2197,7 +2197,7 @@ input:focus {
     box-shadow: 0 0 0 3px rgba(255, 51, 102, 0.1);
 }
 
-/* Disabled while a status (SQ / NP / DNF) is active on the row */
+/* Disabled while a status (DSQ / DNS / DNF) is active on the row */
 .time-input:disabled {
     background: var(--color-bg-secondary);
     color: var(--color-text-secondary);
@@ -2205,7 +2205,7 @@ input:focus {
     cursor: not-allowed;
 }
 
-/* ---- Status toggle buttons (SQ / NP / DNF) next to the time input ---- */
+/* ---- Status toggle buttons (DSQ / DNS / DNF) next to the time input ---- */
 .time-status-group {
     --status-btn-min-width: 40px;
     --status-btn-hover-border: var(--color-neutral);
@@ -2317,7 +2317,7 @@ input:focus {
     opacity: 0.6;
 }
 
-/* ---- Athletes with a special status (SQ / NP / DNF): no position, muted row ---- */
+/* ---- Athletes with a special status (DSQ / DNS / DNF): no position, muted row ---- */
 .position-badge.position-status {
     width: auto;
     min-width: 36px;

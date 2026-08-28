@@ -30,8 +30,8 @@ function isTimedRace(type) { return TIMED_RACE_TYPES.includes(type); }
  */
 /** @type {Object<string, TimedStatus>} */
 const TIMED_STATUS = {
-    DSQ: { code: 'DSQ', label: 'SQ',  description: 'DSQ',   rankOrder: 2 },
-    DNS: { code: 'DNS', label: 'NP',  description: 'DNS', 	rankOrder: 3 },
+    DSQ: { code: 'DSQ', label: 'DSQ',  description: 'DSQ',   rankOrder: 2 },
+    DNS: { code: 'DNS', label: 'DNS',  description: 'DNS', 	rankOrder: 3 },
     DNF: { code: 'DNF', label: 'DNF', description: 'DNF',   rankOrder: 1 }
 };
 
@@ -839,7 +839,7 @@ document.getElementById('btnConfirmTimeEntry').addEventListener('click', () => {
  *  - no status, empty input:
  *      - athlete has a time          -> error: an existing time can be replaced, never deleted
  *      - athlete has a status only   -> ResultEntry with no status and no time
- *                                       (the status is being removed, e.g. wrongly marked NP)
+ *                                       (the status is being removed, e.g. wrongly marked DNS)
  *      - athlete has nothing         -> skipped (result not available yet)
  *  - no status, unparsable input     -> error
  *  - no status, valid time           -> ResultEntry with that time and no status
@@ -901,7 +901,7 @@ function collectTimeEntryInputs(battery) {
     if (hasFormatError) {
         errorMessage = '❌ Uno o più tempi non sono nel formato corretto (MM:SS.mmm o SS.mmm)';
     } else if (hasDeletedTime) {
-        errorMessage = '❌ Un tempo già inserito non può essere cancellato, solo sostituito (oppure assegna uno stato SQ / NP / DNF)';
+        errorMessage = '❌ Un tempo già inserito non può essere cancellato, solo sostituito (oppure assegna uno stato DSQ / DNS / DNF)';
     }
     return { entries, errorMessage };
 }
@@ -1000,7 +1000,7 @@ function applyTimeEntries(battery, entries) {
  *
  * Athletes ranked by time come first, sorted ascending, with positions (ties share
  * the same position). Athletes with a special status follow, grouped by
- * TIMED_STATUS.rankOrder (DNF, then SQ, then NP), without a position; within the
+ * TIMED_STATUS.rankOrder (DNF, then DSQ, then DNS), without a position; within the
  * same status they are listed by bib. A stored time of a status athlete is ignored
  * for ranking purposes.
  */
@@ -1363,7 +1363,7 @@ function parseAthleteTable(table) {
     for (const row of table.querySelectorAll('tr')) {
         const cells = row.querySelectorAll('td');
         if (cells.length < 3) continue;
-        if (Array.from(cells).some(td => td.textContent.trim() === 'NP')) continue;
+        if (Array.from(cells).some(td => td.textContent.trim() === 'DNS')) continue;
         let num = parseInt(cells[0].textContent.trim(), 10);
         if (isNaN(num) || num <= 0) num = parseInt(cells[1].textContent.trim(), 10);
         if (isNaN(num) || num <= 0) continue;
@@ -2719,7 +2719,7 @@ function exportToPDF() {
 
     sortedAthletes.forEach((athlete, index) => {
         if (yPos > 270) { doc.addPage(); yPos = 20; }
-        const position = athlete.status === 'disqualified' ? 'SQ' : athlete.status === 'lapped' ? 'D' : (index + 1).toString();
+        const position = athlete.status === 'disqualified' ? 'DSQ' : athlete.status === 'lapped' ? 'D' : (index + 1).toString();
         const statusText = athlete.status === 'disqualified' ? 'Squalificato' : athlete.status === 'lapped' ? 'Doppiato' : '';
         doc.text(position, 20, yPos);
         doc.text(`#${athlete.number}`, 35, yPos);
