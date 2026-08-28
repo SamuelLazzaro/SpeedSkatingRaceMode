@@ -405,7 +405,10 @@ function formatDigitsToTime(digits) {
 }
 
 function setupTimeAutoFormat(input) {
-    input.dataset.digits = '';
+    // Seed the digit buffer from a pre-filled time (edit mode), so that Backspace
+    // removes one digit at a time instead of wiping the whole field.
+    // Leading zeros are dropped: "00:05.231" -> "5231", exactly as it would have been typed.
+    input.dataset.digits = input.value.replace(/\D/g, '').replace(/^0+/, '');
     input.addEventListener('keydown', (e) => {
         const passthrough = ['Tab', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
         if (passthrough.includes(e.key)) return;
@@ -447,6 +450,34 @@ function showTimedRaceScreen() {
 
     renderTimedLeaderboard();
     renderRemainingBatteries();
+    renderCompletedBatteries();
+}
+
+/**
+ * Tells whether a timed-race athlete already has a recorded time.
+ * Handles both null (fresh state) and undefined (state restored from Firebase,
+ * which drops null properties on write).
+ * @param {{timeMs: number|null|undefined}} athlete
+ * @returns {boolean}
+ */
+function athleteHasTime(athlete) {
+    return Number.isFinite(athlete.timeMs);
+}
+
+/**
+ * Finds the index in state.timedBatteries of the battery containing an athlete.
+ * The battery number is preferred (the same bib could in theory appear in several
+ * batteries); leaderboards saved before that field existed fall back to a bib-only search.
+ * @param {number} bib
+ * @param {number} batteryNumber - NaN when unknown
+ * @returns {number} index, or -1 if not found
+ */
+function findTimedBatteryIndex(bib, batteryNumber) {
+    if (!isNaN(batteryNumber)) {
+        const idx = state.timedBatteries.findIndex(b => b.number === batteryNumber);
+        if (idx >= 0 && state.timedBatteries[idx].athletes.some(a => a.bib === bib)) return idx;
+    }
+    return state.timedBatteries.findIndex(b => b.athletes.some(a => a.bib === bib));
 }
 
 function renderTimedLeaderboard() {
@@ -473,22 +504,40 @@ function renderTimedLeaderboard() {
             <th style="width:120px;">Tempo</th>
         </tr></thead><tbody>`;
 
+    // Admin only: a pencil hints that the row can be clicked to edit the time
+    const editHint = isAdmin
+        ? '<span class="timed-edit-hint" title="Clicca per modificare il tempo">✏️</span>'
+        : '';
+
     state.timedLeaderboard.forEach(entry => {
         const posClass = entry.position === 1 ? 'position-1' :
                          entry.position === 2 ? 'position-2' :
                          entry.position === 3 ? 'position-3' : 'position-other';
-        html += `<tr>
+        const batteryAttr = (entry.batteryNumber !== undefined) ? entry.batteryNumber : '';
+        html += `<tr data-bib="${entry.bib}" data-battery="${batteryAttr}">
             <td><span class="position-badge ${posClass}">${entry.position}</span></td>
             <td><span class="athlete-number">#${entry.bib}</span></td>
             <td>${entry.surname || ''}</td>
             <td>${entry.name || ''}</td>
             <td class="timed-team-cell">${entry.team || ''}</td>
-            <td><span class="timed-time-cell">${entry.time || ''}</span></td>
+            <td><span class="timed-time-cell">${entry.time || ''}</span>${editHint}</td>
         </tr>`;
     });
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Admin only: clicking an athlete opens the time modal for that athlete alone
+    if (isAdmin) {
+        container.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                const bib = parseInt(row.dataset.bib);
+                const batteryNumber = parseInt(row.dataset.battery); // NaN for legacy entries
+                const batteryIdx = findTimedBatteryIndex(bib, batteryNumber);
+                if (batteryIdx >= 0) openSingleTimeEditModal(batteryIdx, bib);
+            });
+        });
+    }
 }
 
 function renderRemainingBatteries() {
@@ -532,19 +581,101 @@ function renderRemainingBatteries() {
     }
 }
 
+/**
+ * Renders the "completed batteries" section (admin only).
+ * Once every athlete of a battery has a time, the battery leaves the "remaining" list;
+ * this section keeps it reachable so the admin can reopen it and correct the times.
+ * Viewers already see the times in the leaderboard, so the section is hidden for them.
+ */
+function renderCompletedBatteries() {
+    const section = document.getElementById('completedBatteriesSection');
+    const container = document.getElementById('completedBatteriesContent');
+    if (!section || !container) return;
+
+    const completed = state.timedBatteries.filter(b => b.completed);
+    const visible = isAdmin && completed.length > 0;
+    section.classList.toggle('hidden', !visible);
+    if (!visible) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    completed.forEach(battery => {
+        const athleteSummary = battery.athletes
+            .map(a => `#${a.bib} ${a.surname} ${a.name}`.trim() + ` (${a.time})`)
+            .join(', ');
+        html += `<div class="remaining-battery-item clickable" data-battery="${battery.number}">
+            <div class="remaining-battery-header">
+                <span class="remaining-battery-title">Batteria n.${battery.number}</span>
+                <span class="remaining-battery-enter">Modifica tempi →</span>
+            </div>
+            <div class="remaining-battery-athletes">${athleteSummary}</div>
+        </div>`;
+    });
+    container.innerHTML = html;
+
+    container.querySelectorAll('.remaining-battery-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const batteryNumber = parseInt(item.dataset.battery);
+            const idx = state.timedBatteries.findIndex(b => b.number === batteryNumber);
+            if (idx >= 0) openBatteryTimeModal(idx);
+        });
+    });
+}
+
 // ========== TIME ENTRY MODAL ==========
+// The same modal serves two purposes:
+//  - battery mode: every athlete of a battery (first entry, or review of a completed battery)
+//  - single mode:  one athlete only, opened by clicking a row of the leaderboard
+// Submitting only reads the rows actually rendered, so no extra state is needed for the mode.
 let _currentTimedBatteryIdx = -1;
 
+/**
+ * Opens the modal with every athlete of the battery.
+ * @param {number} batteryIdx - index in state.timedBatteries
+ */
 function openBatteryTimeModal(batteryIdx) {
-    _currentTimedBatteryIdx = batteryIdx;
+    openTimeEntryModal(batteryIdx, null);
+}
+
+/**
+ * Opens the modal with a single athlete, to correct their time.
+ * @param {number} batteryIdx - index in state.timedBatteries
+ * @param {number} bib
+ */
+function openSingleTimeEditModal(batteryIdx, bib) {
+    openTimeEntryModal(batteryIdx, bib);
+}
+
+/**
+ * @param {number} batteryIdx - index in state.timedBatteries
+ * @param {number|null} onlyBib - when set, only this athlete is shown
+ */
+function openTimeEntryModal(batteryIdx, onlyBib) {
     const battery = state.timedBatteries[batteryIdx];
     if (!battery) return;
 
-    document.getElementById('timeEntryTitle').textContent = `Batteria n.${battery.number}`;
+    const isSingleEdit = onlyBib !== null;
+    const athletesToShow = isSingleEdit
+        ? battery.athletes.filter(a => a.bib === onlyBib)
+        : battery.athletes;
+    if (athletesToShow.length === 0) return;
+
+    _currentTimedBatteryIdx = batteryIdx;
+
+    let title = `Batteria n.${battery.number}`;
+    if (isSingleEdit) {
+        title = `Modifica tempo — Batteria n.${battery.number}`;
+    } else if (battery.completed) {
+        title = `Modifica tempi — Batteria n.${battery.number}`;
+    }
+    document.getElementById('timeEntryTitle').textContent = title;
+    document.getElementById('btnConfirmTimeEntry').textContent = isSingleEdit ? 'Salva tempo' : 'Conferma tempi';
 
     const athletesContainer = document.getElementById('timeEntryAthletes');
     let html = '';
-    battery.athletes.forEach(a => {
+    athletesToShow.forEach(a => {
         const fullName = [a.surname, a.name].filter(Boolean).join(' ');
         html += `<div class="time-input-row">
             <span class="time-input-bib">#${a.bib}</span>
@@ -574,66 +705,142 @@ document.getElementById('btnConfirmTimeEntry').addEventListener('click', () => {
     submitBatteryTimes(_currentTimedBatteryIdx);
 });
 
+/**
+ * A validated time typed in the modal for one athlete.
+ * @typedef {Object} TimeEntry
+ * @property {Object} athlete - the athlete object inside state.timedBatteries
+ * @property {number} timeMs
+ * @property {string} time - normalized "MM:SS.mmm"
+ */
+
+/**
+ * Reads and validates the inputs currently shown in the modal.
+ *
+ * Rules for each input:
+ *  - empty, athlete without a time  -> skipped (time not available yet)
+ *  - empty, athlete with a time     -> error: an existing time can be replaced, never deleted
+ *  - unparsable                     -> error
+ *  - valid                          -> returned as a TimeEntry
+ * Invalid inputs get the "error" class so the admin sees which ones to fix.
+ *
+ * @param {Object} battery - the battery whose athletes are shown in the modal
+ * @returns {{entries: TimeEntry[], errorMessage: string|null}}
+ */
+function collectTimeEntryInputs(battery) {
+    const inputs = document.querySelectorAll('#timeEntryAthletes .time-input');
+    const entries = [];
+    let hasFormatError = false;
+    let hasDeletedTime = false;
+
+    inputs.forEach(input => {
+        const bib = parseInt(input.dataset.bib);
+        const athlete = battery.athletes.find(a => a.bib === bib);
+        if (!athlete) return;
+
+        const typedValue = input.value.trim();
+        if (!typedValue) {
+            const isDeletingExistingTime = athleteHasTime(athlete);
+            input.classList.toggle('error', isDeletingExistingTime);
+            if (isDeletingExistingTime) hasDeletedTime = true;
+            return;
+        }
+
+        const ms = timeToMs(typedValue);
+        if (ms === null) {
+            input.classList.add('error');
+            hasFormatError = true;
+            return;
+        }
+
+        input.classList.remove('error');
+        entries.push({ athlete, timeMs: ms, time: msToTime(ms) });
+    });
+
+    let errorMessage = null;
+    if (hasFormatError) {
+        errorMessage = '❌ Uno o più tempi non sono nel formato corretto (MM:SS.mmm o SS.mmm)';
+    } else if (hasDeletedTime) {
+        errorMessage = '❌ Un tempo già inserito non può essere cancellato, solo sostituito';
+    }
+    return { entries, errorMessage };
+}
+
+/**
+ * Handles "Conferma" in the time entry modal.
+ *
+ * Flow:
+ *  1. validate the inputs (see collectTimeEntryInputs)
+ *  2. keep only the entries that actually change something
+ *  3. if at least one EXISTING time is being changed, ask for confirmation
+ *     showing "old -> new" for each of them; brand-new times are saved directly
+ *
+ * @param {number} batteryIdx - index in state.timedBatteries
+ */
 function submitBatteryTimes(batteryIdx) {
     if (batteryIdx < 0) return;
     const battery = state.timedBatteries[batteryIdx];
     if (!battery) return;
 
-    const inputs = document.querySelectorAll('#timeEntryAthletes .time-input');
-    let hasError = false;
-    const results = [];
-
-    inputs.forEach(input => {
-        const bib = parseInt(input.dataset.bib);
-        const val = input.value.trim();
-        if (!val) {
-            // Empty = skip (no time assigned yet)
-            input.classList.remove('error');
-            results.push({ bib, time: null, timeMs: null });
-            return;
-        }
-        const ms = timeToMs(val);
-        if (ms === null) {
-            input.classList.add('error');
-            hasError = true;
-        } else {
-            input.classList.remove('error');
-            results.push({ bib, time: msToTime(ms), timeMs: ms });
-        }
-    });
-
-    if (hasError) {
-        alert('❌ Uno o più tempi non sono nel formato corretto (MM:SS.mmm o SS.mmm)');
+    const { entries, errorMessage } = collectTimeEntryInputs(battery);
+    if (errorMessage) {
+        alert(errorMessage);
         return;
     }
 
-    // Apply results to battery athletes
-    results.forEach(r => {
-        const athlete = battery.athletes.find(a => a.bib === r.bib);
-        if (athlete) {
-            athlete.time = r.time;
-            athlete.timeMs = r.timeMs;
-        }
+    const changedEntries = entries.filter(e => e.timeMs !== e.athlete.timeMs);
+    if (changedEntries.length === 0) {
+        closeBatteryTimeModal();
+        return;
+    }
+
+    const modifiedExisting = changedEntries.filter(e => athleteHasTime(e.athlete));
+    if (modifiedExisting.length === 0) {
+        applyTimeEntries(battery, changedEntries);
+        return;
+    }
+
+    const changesText = modifiedExisting.map(e => {
+        const fullName = [e.athlete.surname, e.athlete.name].filter(Boolean).join(' ');
+        return `#${e.athlete.bib} ${fullName}: ${e.athlete.time} → ${e.time}`;
+    }).join('\n');
+    const dialogTitleText = modifiedExisting.length === 1 ? 'Modifica tempo' : 'Modifica tempi';
+    showDialog('✏️', dialogTitleText,
+        `Confermi la modifica dei seguenti tempi?\n\n${changesText}`,
+        () => applyTimeEntries(battery, changedEntries));
+}
+
+/**
+ * Writes the entries into the battery, then recomputes leaderboard, persists and re-renders.
+ * @param {Object} battery
+ * @param {TimeEntry[]} entries
+ */
+function applyTimeEntries(battery, entries) {
+    entries.forEach(e => {
+        e.athlete.time = e.time;
+        e.athlete.timeMs = e.timeMs;
     });
 
-    // Mark battery as completed if all athletes have a time
-    const allDone = battery.athletes.every(a => a.time !== null);
-    if (allDone) battery.completed = true;
+    // A battery is completed when every athlete has a time
+    battery.completed = battery.athletes.every(athleteHasTime);
 
-    // Rebuild leaderboard
     calculateTimedLeaderboard();
     saveToLocalStorage();
     closeBatteryTimeModal();
     renderTimedLeaderboard();
     renderRemainingBatteries();
+    renderCompletedBatteries();
 }
 
 function calculateTimedLeaderboard() {
     const entries = [];
     state.timedBatteries.forEach(battery => {
         battery.athletes.forEach(a => {
-            if (a.timeMs !== null) {
-                entries.push({ bib: a.bib, name: a.name, surname: a.surname, team: a.team, time: a.time, timeMs: a.timeMs });
+            if (athleteHasTime(a)) {
+                entries.push({
+                    bib: a.bib, name: a.name, surname: a.surname, team: a.team,
+                    time: a.time, timeMs: a.timeMs,
+                    batteryNumber: battery.number // lets the leaderboard locate the athlete for editing
+                });
             }
         });
     });

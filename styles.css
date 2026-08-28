@@ -1110,6 +1110,7 @@ input:focus {
     color: var(--color-text-secondary);
     margin-bottom: 24px;
     line-height: 1.5;
+    white-space: pre-line;
 }
 
 .dialog-buttons {
@@ -2228,5 +2229,12 @@ input:focus {
 
 .timed-team-cell {
     color: var(--color-text-secondary);
+}
+
+/* Pencil shown next to the time for the admin (row is clickable to edit) */
+.timed-edit-hint {
+    margin-left: 6px;
+    font-size: 12px;
+    opacity: 0.6;
 }
 
