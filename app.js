@@ -30,9 +30,9 @@ function isTimedRace(type) { return TIMED_RACE_TYPES.includes(type); }
  */
 /** @type {Object<string, TimedStatus>} */
 const TIMED_STATUS = {
-    DSQ: { code: 'DSQ', label: 'SQ',  description: 'Squalificato',   rankOrder: 2 },
-    DNS: { code: 'DNS', label: 'NP',  description: 'Non presentato', rankOrder: 3 },
-    DNF: { code: 'DNF', label: 'DNF', description: 'Non arrivato',   rankOrder: 1 }
+    DSQ: { code: 'DSQ', label: 'SQ',  description: 'DSQ',   rankOrder: 2 },
+    DNS: { code: 'DNS', label: 'NP',  description: 'DNS', 	rankOrder: 3 },
+    DNF: { code: 'DNF', label: 'DNF', description: 'DNF',   rankOrder: 1 }
 };
 
 // ========== STATE MANAGEMENT ==========
